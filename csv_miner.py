@@ -1,5 +1,5 @@
-def csv_generator(wdir,crypto_sub,current_round,daily_hour,days_ago):
-'''This function returns csv files with post, comment and daily thread 24-hour data from crypto_sub.
+def csv_miner(wdir,crypto_sub,current_round,daily_hour,days_ago):
+'''This function mines crypto_sub and returns csv files with post, comment and daily thread 24-hour data.
 
    Inputs:
    wdir [str]: working directory
