@@ -82,9 +82,11 @@ author: reddito321
               if p['author'][k] == users[i]:
                   plen[i]+=1
                   if p['flair'][k] == "Media" or p['flair'][k] == "Comedy" or p['flair'][k] == "Self Story":
-                      pscore+=0.1*(p['score'][k]-1)
+                      pscore+=0.25*(p['score'][k]-1)
                   elif p['flair'][k] == "OC - Original Content":
                       pscore+=2*(p['score'][k]-1)
+                  elif p['flair'][k] == "Question":
+                      pscore+=.1*(p['score'][k]-1)
                   elif p['flair'][k] == "Link":
                       pscore+=0.75*(p['score'][k]-1)
                   else:
