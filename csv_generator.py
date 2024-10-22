@@ -65,6 +65,13 @@ author: reddito321
           d['score'] = d['score']/2
           
           user_comments = pd.concat([c.iloc[idx[0:]],d.iloc[idxd[0:]]]).sort_values('date')[0:climit]
+          to_remove = pd.concat([c.iloc[idx[0:]],d.iloc[idxd[0:]]]).sort_values('date')[climit:]
+        
+          cc = c[~c.id.isin(to_remove.id)]
+          dd = d[~d.id.isin(to_remove.id)]     
+          cc.to_csv(comments[j][:-4]+'_limited.csv')
+          dd.to_csv(comments[j][:-4]+'_limited.csv')
+
           cscore+=np.sum(user_comments['score']-1)
           clen[i]+=len(user_comments)
       cscores[i]+=cscore     
