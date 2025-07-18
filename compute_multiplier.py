@@ -257,3 +257,4 @@ def get_multiplier(TARGET_WALLET):
 #for i in range(0,len(dist_data)):
 #  multipliers.append(get_multiplier(data['blockchain_address'][i])
 #dist_data['multipliers'] = multipliers
+#dist_data.to_csv(PATH_TO_FILE, index=False)
