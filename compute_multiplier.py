@@ -212,8 +212,6 @@ def get_multiplier(TARGET_WALLET):
         return minted, total
 
     transactions = get_transactions(TARGET_WALLET, ORIGIN_WALLET, ETHERSCAN_API_KEY)
-    if not transactions: 
-        return 1.0
 
     transaction_flow = analyze_token_flows(
             target_wallet=TARGET_WALLET,
@@ -245,6 +243,9 @@ def get_multiplier(TARGET_WALLET):
     if earned > 0:
         ratio = 100*(1 - (current_balance + sent_to_lp + membership) / earned)
     else:
+        ratio = 25
+    
+    if ratio < 0:
         ratio = 0
 
     def compute_multiplier(x):
@@ -253,9 +254,21 @@ def get_multiplier(TARGET_WALLET):
         else:
             return -0.012 * x + 1.3
 
-    multiplier = compute_multiplier(ratio)
+    def need_to_buy(current_balance, earned, lp, membership):
+        c = 0.6*earned - (current_balance+lp+membership)
+        if c and c < 0:
+            return 0
+        else:
+            return 0.6*earned - (current_balance+lp+membership)
+    
+    need_to_buy = need_to_buy(current_balance, earned, sent_to_lp, membership)
 
-    return multiplier, current_balance, earned, sent_to_lp, membership
+    if not transactions: 
+        multiplier = 1.0
+    else:
+        multiplier = compute_multiplier(ratio)
+
+    return multiplier, need_to_buy, current_balance, earned, sent_to_lp, membership
 
 # To use this function to add a multiplier column to a round_XXX.csv file, uncomment the lines below.
 
