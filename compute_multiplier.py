@@ -211,6 +211,10 @@ def get_multiplier(TARGET_WALLET):
         
         return minted, total
 
+    transactions = get_transactions(TARGET_WALLET, ORIGIN_WALLET, ETHERSCAN_API_KEY)
+    if not transactions: 
+        return 1.0
+
     transaction_flow = analyze_token_flows(
             target_wallet=TARGET_WALLET,
             origin_wallet=ORIGIN_WALLET,
@@ -220,7 +224,7 @@ def get_multiplier(TARGET_WALLET):
         )
 
     _, membership = check_nft_mints(
-        transactions=get_transactions(TARGET_WALLET, ORIGIN_WALLET, ETHERSCAN_API_KEY),
+        transactions=transactions,
         target_wallet=TARGET_WALLET,
         name_keywords=["EthTrader", "Special","Membership"],
         token_contract_address=TOKEN_CONTRACT
@@ -238,23 +242,26 @@ def get_multiplier(TARGET_WALLET):
     current_balance = results['current_wallet_balance']
     sent_to_lp = results['tokens_sent_to_lp']
 
-    ratio = 100*(1 - (current_balance + sent_to_lp + membership) / earned)
+    if earned > 0:
+        ratio = 100*(1 - (current_balance + sent_to_lp + membership) / earned)
+    else:
+        ratio = 0
 
     def compute_multiplier(x):
-        if x < 25:
+        if x <= 25:
             return 1
         else:
             return -0.012 * x + 1.3
 
     multiplier = compute_multiplier(ratio)
 
-    return multiplier
+    return multiplier, current_balance, earned, sent_to_lp, membership
 
 # To use this function to add a multiplier column to a round_XXX.csv file, uncomment the lines below.
 
 # dist_data = pd.read_csv(PATH_TO_FILE)
 # multipliers = []
 #for i in range(0,len(dist_data)):
-#  multipliers.append(get_multiplier(data['blockchain_address'][i])
+#  multipliers.append(get_multiplier(data['blockchain_address'][i])[0])
 #dist_data['multipliers'] = multipliers
 #dist_data.to_csv(PATH_TO_FILE, index=False)
