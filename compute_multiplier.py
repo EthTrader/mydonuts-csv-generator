@@ -146,7 +146,6 @@ def get_multiplier(TARGET_WALLET):
         Analyze token flows between wallets and LP
         Returns comprehensive token flow metrics
         """
-        # First get ALL transactions involving the target wallet
         params = {
             'module': 'account',
             'action': 'tokentx',
@@ -198,7 +197,6 @@ def get_multiplier(TARGET_WALLET):
                 tx['from'].lower() == lp_address.lower()):
                 received_from_lp += value
         
-        # Rest of your calculations remain the same
         current_balance = get_token_balance(target_wallet, token_contract_address)
         lp_current_balance = get_token_balance(lp_address, token_contract_address)
         net_lp_contribution = sent_to_lp - received_from_lp
@@ -225,7 +223,6 @@ def get_multiplier(TARGET_WALLET):
         Check for NFT mints paid with ERC-20 token burns
         Returns: (minted: bool, total_amount_paid: float)
         """
-        # First get ALL token transfer events for this wallet
         params = {
             'module': 'account',
             'action': 'tokentx',
