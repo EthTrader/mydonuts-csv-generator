@@ -164,7 +164,6 @@ def get_multiplier(TARGET_WALLET):
         
         if data['status'] != '1':
             print(f"API Error: {data.get('message')}")
-            return default_token_flow_response()
 
         decimals = get_token_decimals(token_contract_address)
         transactions = data['result']
