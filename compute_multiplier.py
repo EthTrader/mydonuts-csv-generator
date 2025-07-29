@@ -41,10 +41,6 @@ def get_multiplier(TARGET_WALLET):
         }
     ]
 
-    ORIGIN_WALLET = "0x439ceE4cC4EcBD75DC08D9a17E92bDdCc11CDb8C"
-    TOKEN_CONTRACT = "0xF42e2B8bc2aF8B110b65be98dB1321B1ab8D44f5"
-    LP_ADDRESS = "0x65f7a98D87BC21A3748545047632FEf4d3Ff9a67"
-
     def get_token_decimals(token_contract_address):
         """Get token decimals (Arbitrum-compatible)"""
         contract = w3.eth.contract(address=token_contract_address, abi=ERC20_ABI)
@@ -59,34 +55,54 @@ def get_multiplier(TARGET_WALLET):
 
     def get_transactions(target_wallet, origin_wallet, api_key):
         """
-        Get all ERC-20 transfers to target_wallet from origin_wallet on Arbitrum One
-        using the official Arbiscan API endpoint.
+        Get ALL ERC-20 transfers from origin_wallet to target_wallet on Arbitrum One
         """
         ARBISCAN_API_URL = "https://api.etherscan.io/v2/api?chainid=42161"
         
-        params = {
-            'module': 'account',
-            'action': 'tokentx',
-            'address': target_wallet,
-            'startblock': 0,
-            'endblock': 99999999,
-            'sort': 'asc',
-            'page': 1,
-            'offset': 100,
-            'apikey': api_key
-        }
+        all_transactions = []
+        page = 1
+        offset = 10000
         
-        response = requests.get(ARBISCAN_API_URL, params=params)
-        data = response.json()
+        while True:
+            params = {
+                'module': 'account',
+                'action': 'tokentx',
+                'contractaddress': '0xF42e2B8bc2aF8B110b65be98dB1321B1ab8D44f5',
+                'address': target_wallet,
+                'startblock': 0,
+                'endblock': 99999999,
+                'sort': 'asc',
+                'page': page,
+                'offset': offset,
+                'apikey': api_key
+            }
+            
+            response = requests.get(ARBISCAN_API_URL, params=params)
+            data = response.json()
+            
+            if data['status'] != '1':
+                print(f"API Error: {data.get('message')}")
+                break
+                
+            transactions = data['result']
+            if not transactions:
+                break
+                
+            # Filter for transactions from origin to target wallet
+            filtered = [
+                tx for tx in transactions
+                if (tx['from'].lower() == origin_wallet.lower() and 
+                    tx['to'].lower() == target_wallet.lower() and
+                    tx['contractAddress'].lower() == '0xf42e2b8bc2af8b110b65be98db1321b1ab8d44f5')
+            ]
+            all_transactions.extend(filtered)
+            
+            if len(transactions) < offset:
+                break
+                
+            page += 1
         
-        if data['status'] != '1':
-            print(f"API Error: {data.get('message')}")
-            return []
-        
-        return [
-            tx for tx in data['result']
-            if tx['from'].lower() == origin_wallet.lower()
-        ]
+        return all_transactions
 
     def transactions_to_dataframe(transactions):
         """
@@ -109,7 +125,7 @@ def get_multiplier(TARGET_WALLET):
         df['datetime'] = pd.to_datetime(df['timeStamp'], unit='s')
         df['token_value'] = df['value'] / (10**18)  # Assuming 18 decimals
         
-    
+
         pd.set_option('display.float_format', '{:.8f}'.format)
         
         display_cols = [
@@ -125,14 +141,34 @@ def get_multiplier(TARGET_WALLET):
             'value': 'raw_value'
         })
 
-
     def analyze_token_flows(target_wallet, origin_wallet, token_contract_address, lp_address, api_key):
         """
-        Analyze token flows between wallets and LP using Etherscan API v2
+        Analyze token flows between wallets and LP
         Returns comprehensive token flow metrics
         """
-        transactions = get_transactions(target_wallet, origin_wallet, api_key)    
+        # First get ALL transactions involving the target wallet
+        params = {
+            'module': 'account',
+            'action': 'tokentx',
+            'contractaddress': token_contract_address,
+            'address': target_wallet,
+            'startblock': 0,
+            'endblock': 99999999,
+            'sort': 'asc',
+            'page': 1,
+            'offset': 10000,  # Max allowed by API
+            'apikey': api_key
+        }
+        
+        response = requests.get("https://api.etherscan.io/v2/api?chainid=42161", params=params)
+        data = response.json()
+        
+        if data['status'] != '1':
+            print(f"API Error: {data.get('message')}")
+            return default_token_flow_response()
+
         decimals = get_token_decimals(token_contract_address)
+        transactions = data['result']
         
         received_from_origin = 0
         sent_to_origin = 0
@@ -140,9 +176,6 @@ def get_multiplier(TARGET_WALLET):
         received_from_lp = 0
         
         for tx in transactions:
-            if tx['contractAddress'].lower() != token_contract_address.lower():
-                continue
-                
             value = int(tx['value']) / (10 ** decimals)
             
             # Received from origin
@@ -160,11 +193,12 @@ def get_multiplier(TARGET_WALLET):
                 tx['to'].lower() == lp_address.lower()):
                 sent_to_lp += value
                 
-            # Received from LP (e.g., removing liquidity)
+            # Received from LP
             elif (tx['to'].lower() == target_wallet.lower() and 
                 tx['from'].lower() == lp_address.lower()):
                 received_from_lp += value
         
+        # Rest of your calculations remain the same
         current_balance = get_token_balance(target_wallet, token_contract_address)
         lp_current_balance = get_token_balance(lp_address, token_contract_address)
         net_lp_contribution = sent_to_lp - received_from_lp
@@ -186,46 +220,86 @@ def get_multiplier(TARGET_WALLET):
             'total_transactions_processed': len(transactions)
         }
 
-    def check_nft_mints(transactions, target_wallet, name_keywords, token_contract_address):
+    def check_nft_mints(target_wallet, name_keywords, token_contract_address, api_key):
         """
-        Args:
-            name_keywords: List of words that should appear in NFT name (case insensitive)
-        Returns:
-            tuple: (minted: bool, total_amount_paid: float)
+        Check for NFT mints paid with ERC-20 token burns
+        Returns: (minted: bool, total_amount_paid: float)
         """
-        total = 0.0
-        minted = False
+        # First get ALL token transfer events for this wallet
+        params = {
+            'module': 'account',
+            'action': 'tokentx',
+            'contractaddress': token_contract_address,
+            'address': target_wallet,
+            'startblock': 0,
+            'endblock': 99999999,
+            'sort': 'asc',
+            'page': 1,
+            'offset': 10000,
+            'apikey': api_key
+        }
+        
+        response = requests.get("https://api.etherscan.io/v2/api?chainid=42161", params=params)
+        data = response.json()
+        
+        if data['status'] != '1':
+            print(f"API Error: {data.get('message')}")
+            return False, 0.0
+
+        # Now get NFT transfer events
+        nft_params = {
+            'module': 'account',
+            'action': 'tokennfttx',
+            'address': target_wallet,
+            'startblock': 0,
+            'endblock': 99999999,
+            'sort': 'asc',
+            'page': 1,
+            'offset': 10000,
+            'apikey': api_key
+        }
+        
+        nft_response = requests.get("https://api.etherscan.io/v2/api?chainid=42161", params=nft_params)
+        nft_data = nft_response.json()
+        
         keywords = [kw.lower() for kw in name_keywords]
+        total_paid = 0.0
+        minted = False
         
-        for tx in transactions:
-            if (tx['to'].lower() == target_wallet.lower() and
-                tx['from'] == '0x0000000000000000000000000000000000000000'):
-                
-                # Check if all keywords are in NFT name
-                tx_name = tx.get('tokenName', '').lower()
-                if all(kw in tx_name for kw in keywords):
-                    minted = True
-                    for internal_tx in tx.get('internalTransactions', []):
-                        if (internal_tx.get('contractAddress', '').lower() == token_contract_address.lower()):
-                            total += int(internal_tx.get('value', 0)) / (10 ** int(tx.get('tokenDecimal', 18)))
+        if nft_data['status'] == '1':
+            for nft_tx in nft_data['result']:
+                # Check for NFT mint (from null address)
+                if (nft_tx['to'].lower() == target_wallet.lower() and
+                    nft_tx['from'] == '0x0000000000000000000000000000000000000000'):
+                    
+                    # Check NFT name match
+                    tx_name = nft_tx.get('tokenName', '').lower()
+                    if any(kw in tx_name for kw in keywords):
+                        minted = True
+                        
+                        # Find corresponding token burn within ±5 blocks
+                        for token_tx in data['result']:
+                            if (abs(int(token_tx['blockNumber']) - int(nft_tx['blockNumber'])) <= 5 and
+                                token_tx['from'].lower() == target_wallet.lower()):
+                                
+                                value = int(token_tx.get('value', 0))
         
-        return minted, total
+                                decimals = int(token_tx.get('tokenDecimal', 18))
+                                total_paid += value / (10 ** decimals)
+        
+        return minted, total_paid
+
+    ORIGIN_WALLET = "0x439ceE4cC4EcBD75DC08D9a17E92bDdCc11CDb8C"
+    TOKEN_CONTRACT = "0xF42e2B8bc2aF8B110b65be98dB1321B1ab8D44f5"
+    LP_ADDRESS = "0x65f7a98D87BC21A3748545047632FEf4d3Ff9a67"
 
     transactions = get_transactions(TARGET_WALLET, ORIGIN_WALLET, ETHERSCAN_API_KEY)
 
-    transaction_flow = analyze_token_flows(
-            target_wallet=TARGET_WALLET,
-            origin_wallet=ORIGIN_WALLET,
-            token_contract_address=TOKEN_CONTRACT,
-            lp_address=LP_ADDRESS,
-            api_key=ETHERSCAN_API_KEY
-        )
-
     _, membership = check_nft_mints(
-        transactions=transactions,
         target_wallet=TARGET_WALLET,
         name_keywords=["EthTrader", "Special","Membership"],
-        token_contract_address=TOKEN_CONTRACT
+        token_contract_address=TOKEN_CONTRACT,
+        api_key=ETHERSCAN_API_KEY
     )
 
     results = analyze_token_flows(
@@ -269,6 +343,7 @@ def get_multiplier(TARGET_WALLET):
         multiplier = compute_multiplier(ratio)
 
     return multiplier, need_to_buy, current_balance, earned, sent_to_lp, membership
+
 
 # To use this function to add a multiplier column to a round_XXX.csv file, uncomment the lines below.
 
