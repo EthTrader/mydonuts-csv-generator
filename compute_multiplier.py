@@ -306,9 +306,13 @@ def get_multiplier(TARGET_WALLET):
     earned = results['tokens_received_from_origin']
     current_balance = results['current_wallet_balance']
     sent_to_lp = results['tokens_sent_to_lp']
+    net_lp = results['net_transferred_to_lp']
+
+    if net_lp < 0:
+        net_lp = 0
 
     if earned > 0:
-        ratio = 100*(1 - (current_balance + sent_to_lp + membership) / earned)
+        ratio = 100*(1 - (current_balance + net_lp + membership) / earned)
     else:
         ratio = 25
     
@@ -328,7 +332,7 @@ def get_multiplier(TARGET_WALLET):
         else:
             return 0.6*earned - (current_balance+lp+membership)
     
-    need_to_buy = need_to_buy(current_balance, earned, sent_to_lp, membership)
+    need_to_buy = need_to_buy(current_balance, earned, net_lp, membership)
 
     if not transactions: 
         multiplier = 1.0
