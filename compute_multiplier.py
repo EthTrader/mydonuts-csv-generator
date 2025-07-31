@@ -334,6 +334,9 @@ def get_multiplier(TARGET_WALLET):
     
     need_to_buy = need_to_buy(current_balance, earned, net_lp, membership)
 
+    if need_to_buy == 0: # Correcting for any rounding errors
+        multiplier = 1
+        
     if not transactions: 
         multiplier = 1.0
     else:
