@@ -326,11 +326,11 @@ def get_multiplier(TARGET_WALLET):
             return -0.012 * x + 1.3
 
     def need_to_buy(current_balance, earned, lp, membership):
-        c = 0.6*earned - (current_balance+lp+membership)
+        c = 0.75*earned - (current_balance+lp+membership)
         if c and c < 0:
             return 0
         else:
-            return 0.6*earned - (current_balance+lp+membership)
+            return 0.75*earned - (current_balance+lp+membership)
     
     need_to_buy = need_to_buy(current_balance, earned, net_lp, membership)
 
